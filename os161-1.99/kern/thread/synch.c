@@ -208,7 +208,7 @@ lock_acquire(struct lock *lock)
     }
     KASSERT(lock->hold == NULL);
     lock->hold = curthread;
-    spinlock_release(&lk->lk_lock);
+    spinlock_release(&lock->lk_lock);
 
 }
 
