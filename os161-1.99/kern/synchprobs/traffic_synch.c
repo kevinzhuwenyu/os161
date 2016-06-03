@@ -24,7 +24,7 @@
 static struct lock *intersectionlock;
 static int count[12];
 static struct cv *allcv[12];
-char *path_name[12] = ["SW", "SN", "SE", "ES", "EW", "EN", "NE", "NS", "NW", "WN", "WE", "WS"];
+char *path_name[12] = {"SW", "SN", "SE", "ES", "EW", "EN", "NE", "NS", "NW", "WN", "WE", "WS"};
                       //0      1     2     3     4     5     6    7      8     9    10    11   
 
 static void count_changer(Direction origin, Direction destination, char sign);
@@ -53,7 +53,7 @@ intersection_sync_init(void)
   }
 
   /* replace this default implementation with your own implementation */
-  if (intersectionSem == NULL) {
+  if (intersectionlock == NULL) {
     panic("could not create intersection semaphore");
   }
 
@@ -76,12 +76,12 @@ void
 intersection_sync_cleanup(void)
 {
   /* replace this default implementation with your own implementation */
-  KASSERT(intersectionSem != NULL);
+  KASSERT(intersectionlock != NULL);
   for(int i = 0; i < 12; i++){
     KASSERT(allcv[i]);
   }
   for(int i = 0; i < 12; i++){
-    cv_destory(allcv[i]);
+    cv_destroy(allcv[i]);
   }
   lock_destroy(intersectionlock);
 }
@@ -93,82 +93,82 @@ static void count_changer(Direction origin, Direction destination, char sign){
   }if(sign == '+'){
     i = 1;
   }if(origin == south && destination == west){
-    num_count[7]+i;
-    num_count[10]+i;
-    num_count[4]+i;
-    num_count[6]+i;
-    num_count[8]+i;
-    num_count[9]+i;
-    num_count[3]+i;
+    count[7]+i;
+    count[10]+i;
+    count[4]+i;
+    count[6]+i;
+    count[8]+i;
+    count[9]+i;
+    count[3]+i;
   }if(origin == south && destination == north){
-    num_count[10]+i;
-    num_count[4]+i;
-    num_count[6]+i;
-    num_count[9]+i;
-    num_count[3]+i;
-    num_count[5]+i;
+    count[10]+i;
+    count[4]+i;
+    count[6]+i;
+    count[9]+i;
+    count[3]+i;
+    count[5]+i;
   }if(origin == south && destination == east){
-    num_count[4]+i;
-    num_count[6]+i;
+    count[4]+i;
+    count[6]+i;
   }if(origin == east && destination == south){
-    num_count[1]+i;
-    num_count[7]+i;
-    num_count[10]+i;
-    num_count[0]+i;
-    num_count[6]+i;
-    num_count[11]+i;
-    num_count[9]+i;
+    count[1]+i;
+    count[7]+i;
+    count[10]+i;
+    count[0]+i;
+    count[6]+i;
+    count[11]+i;
+    count[9]+i;
   }if(origin == east && destination == west){
-    num_count[1]+i;
-    num_count[7]+i;
-    num_count[0]+i;
-    num_count[6]+i;
-    num_count[8]+i;
-    num_count[9]+i;
+    count[1]+i;
+    count[7]+i;
+    count[0]+i;
+    count[6]+i;
+    count[8]+i;
+    count[9]+i;
   }if(origin == east && destination == north){
-    num_count[1]+i;
-    num_count[9]+i;
+    count[1]+i;
+    count[9]+i;
   }if(origin == north && destination == east){
-    num_count[1]+i;
-    num_count[10]+i;
-    num_count[4]+i;
-    num_count[2]+i;
-    num_count[0]+i;
-    num_count[9]+i;
-    num_count[3]+i;
+    count[1]+i;
+    count[10]+i;
+    count[4]+i;
+    count[2]+i;
+    count[0]+i;
+    count[9]+i;
+    count[3]+i;
   }if(origin == north && destination == south){
-    num_count[10]+i;
-    num_count[4]+i;
-    num_count[0]+i;
-    num_count[11]+i;
-    num_count[9]+i;
-    num_count[3]+i;
+    count[10]+i;
+    count[4]+i;
+    count[0]+i;
+    count[11]+i;
+    count[9]+i;
+    count[3]+i;
   }if(origin == north && destination == west){
-    num_count[1]+i;
-    num_count[10]+i;
-    num_count[4]+i;
-    num_count[2]+i;
-    num_count[0]+i;
-    num_count[9]+i;
-    num_count[3]+i;
+    count[1]+i;
+    count[10]+i;
+    count[4]+i;
+    count[2]+i;
+    count[0]+i;
+    count[9]+i;
+    count[3]+i;
   }if(origin == west && destination == north){
-    num_count[1]+i;
-    num_count[7]+i;
-    num_count[4]+i;
-    num_count[0]+i;
-    num_count[6]+i;
-    num_count[3]+i;
-    num_count[5]+i;
+    count[1]+i;
+    count[7]+i;
+    count[4]+i;
+    count[0]+i;
+    count[6]+i;
+    count[3]+i;
+    count[5]+i;
   }if(origin == west && destination == east){
-    num_count[1]+i;
-    num_count[7]+i;
-    num_count[2]+i;
-    num_count[0]+i;
-    num_count[6]+i;
-    num_count[3]+i;
+    count[1]+i;
+    count[7]+i;
+    count[2]+i;
+    count[0]+i;
+    count[6]+i;
+    count[3]+i;
   }if(origin == west && destination == south){
-    num_count[3]+i;
-    num_count[7]+i;
+    count[3]+i;
+    count[7]+i;
   }
 }
 
@@ -219,7 +219,7 @@ static void add_wait_count(Direction origin, Direction destination){
 }
 
 static void wake_up_all(int n){
-  if(num_count[n] == 0){
+  if(count[n] == 0){
     cv_broadcast(allcv[n], intersectionlock);
   }
 }
@@ -314,6 +314,7 @@ static void sub_wait_count(Direction origin, Direction destination){
     count_changer(origin, destination, '-');
     wake_up_all(3);
     wake_up_all(7);
+  }
 }
 
 
@@ -334,7 +335,7 @@ void
 intersection_before_entry(Direction origin, Direction destination) 
 {
   /* replace this default implementation with your own implementation */
-  KASSERT(intersectionSem != NULL);
+  KASSERT(intersectionlock != NULL);
   int *num_count;
   struct cv *cur_cv;
   lock_acquire(intersectionlock);
