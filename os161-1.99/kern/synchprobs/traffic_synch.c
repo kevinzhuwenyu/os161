@@ -90,85 +90,85 @@ static void count_changer(Direction origin, Direction destination, char sign){
   int i;
   if (sign == '-'){
     i = -1;
-  }if(sign == '+'){
+  }else{
     i = 1;
   }if(origin == south && destination == west){
-    count[7]+i;
-    count[10]+i;
-    count[4]+i;
-    count[6]+i;
-    count[8]+i;
-    count[9]+i;
-    count[3]+i;
+    count[7]+=i;
+    count[10]+=i;
+    count[4]+=i;
+    count[6]+=i;
+    count[8]+=i;
+    count[9]+=i;
+    count[3]+=i;
   }if(origin == south && destination == north){
-    count[10]+i;
-    count[4]+i;
-    count[6]+i;
-    count[9]+i;
-    count[3]+i;
-    count[5]+i;
+    count[10]+=i;
+    count[4]+=i;
+    count[6]+=i;
+    count[9]+=i;
+    count[3]+=i;
+    count[5]+=i;
   }if(origin == south && destination == east){
-    count[4]+i;
-    count[6]+i;
+    count[4]+=i;
+    count[6]+=i;
   }if(origin == east && destination == south){
-    count[1]+i;
-    count[7]+i;
-    count[10]+i;
-    count[0]+i;
-    count[6]+i;
-    count[11]+i;
-    count[9]+i;
+    count[1]+=i;
+    count[7]+=i;
+    count[10]+=i;
+    count[0]+=i;
+    count[6]+=i;
+    count[11]+=i;
+    count[9]+=i;
   }if(origin == east && destination == west){
-    count[1]+i;
-    count[7]+i;
-    count[0]+i;
-    count[6]+i;
-    count[8]+i;
-    count[9]+i;
+    count[1]+=i;
+    count[7]+=i;
+    count[0]+=i;
+    count[6]+=i;
+    count[8]+=i;
+    count[9]+=i;
   }if(origin == east && destination == north){
-    count[1]+i;
-    count[9]+i;
+    count[1]+=i;
+    count[9]+=i;
   }if(origin == north && destination == east){
-    count[1]+i;
-    count[10]+i;
-    count[4]+i;
-    count[2]+i;
-    count[0]+i;
-    count[9]+i;
-    count[3]+i;
+    count[1]+=i;
+    count[10]+=i;
+    count[4]+=i;
+    count[2]+=i;
+    count[0]+=i;
+    count[9]+=i;
+    count[3]+=i;
   }if(origin == north && destination == south){
-    count[10]+i;
-    count[4]+i;
-    count[0]+i;
-    count[11]+i;
-    count[9]+i;
-    count[3]+i;
+    count[10]+=i;
+    count[4]+=i;
+    count[0]+=i;
+    count[11]+=i;
+    count[9]+=i;
+    count[3]+=i;
   }if(origin == north && destination == west){
-    count[1]+i;
-    count[10]+i;
-    count[4]+i;
-    count[2]+i;
-    count[0]+i;
-    count[9]+i;
-    count[3]+i;
+    count[1]+=i;
+    count[10]+=i;
+    count[4]+=i;
+    count[2]+=i;
+    count[0]+=i;
+    count[9]+=i;
+    count[3]+=i;
   }if(origin == west && destination == north){
-    count[1]+i;
-    count[7]+i;
-    count[4]+i;
-    count[0]+i;
-    count[6]+i;
-    count[3]+i;
-    count[5]+i;
+    count[1]+=i;
+    count[7]+=i;
+    count[4]+=i;
+    count[0]+=i;
+    count[6]+=i;
+    count[3]+=i;
+    count[5]+=i;
   }if(origin == west && destination == east){
-    count[1]+i;
-    count[7]+i;
-    count[2]+i;
-    count[0]+i;
-    count[6]+i;
-    count[3]+i;
+    count[1]+=i;
+    count[7]+=i;
+    count[2]+=i;
+    count[0]+=i;
+    count[6]+=i;
+    count[3]+=i;
   }if(origin == west && destination == south){
-    count[3]+i;
-    count[7]+i;
+    count[3]+=i;
+    count[7]+=i;
   }
 }
 
