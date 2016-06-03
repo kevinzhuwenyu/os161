@@ -24,7 +24,7 @@
 static struct lock *intersectionlock;
 static int count[12];
 static struct cv *allcv[12];
-char *path_name[12] = {"SW", "SN", "SE", "ES", "EW", "EN", "NE", "NS", "NW", "WN", "WE", "WS"};
+const char * path_name[12] = {"SW", "SN", "SE", "ES", "EW", "EN", "NE", "NS", "NW", "WN", "WE", "WS"};
                       //0      1     2     3     4     5     6    7      8     9    10    11   
 
 static void count_changer(Direction origin, Direction destination, char sign);
