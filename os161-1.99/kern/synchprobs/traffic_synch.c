@@ -24,8 +24,8 @@
 static struct lock *intersectionlock;
 static int count[12];
 static struct cv *allcv[12];
-const char * path_name[12] = {"SW", "SN", "SE", "ES", "EW", "EN", "NE", "NS", "NW", "WN", "WE", "WS"};
-                      //0      1     2     3     4     5     6    7      8     9    10    11   
+const char *path_name[12] = {"SW", "SN", "SE", "ES", "EW", "EN", "NE", "NS", "NW", "WN", "WE", "WS"};
+                            //0      1     2     3     4     5     6    7      8     9    10    11   
 
 static void count_changer(Direction origin, Direction destination, char sign);
 static void wake_up_all(int n);
@@ -49,17 +49,18 @@ intersection_sync_init(void)
 
   for(int i = 0; i < 12; i++){
     count[i] = 0;
-    allcv[i] = cv_create(path_name[i]);
-  }
-
-  /* replace this default implementation with your own implementation */
-  if (intersectionlock == NULL) {
-    panic("could not create intersection semaphore");
   }
 
   for(int i = 0; i < 12; i++){
-    if(allcv[i] == NULL){
-       panic("could not create intersection semaphore");
+    allcv[i] = cv_create(path_name[i]);
+
+  }
+
+  /* replace this default implementation with your own implementation */
+
+  for(int i = 0; i < 12; i++){
+    if(allcv[i] == NULL || intersectionlock == NULL){
+       panic("could not create intersection lock");
     }
   }
   return;
@@ -80,10 +81,11 @@ intersection_sync_cleanup(void)
   for(int i = 0; i < 12; i++){
     KASSERT(allcv[i]);
   }
+  lock_destroy(intersectionlock);
   for(int i = 0; i < 12; i++){
     cv_destroy(allcv[i]);
   }
-  lock_destroy(intersectionlock);
+
 }
 
 static void count_changer(Direction origin, Direction destination, char sign){
@@ -92,7 +94,8 @@ static void count_changer(Direction origin, Direction destination, char sign){
     i = -1;
   }else{
     i = 1;
-  }if(origin == south && destination == west){
+  }
+  if(origin == south && destination == west){
     count[7]+=i;
     count[10]+=i;
     count[4]+=i;
@@ -108,7 +111,7 @@ static void count_changer(Direction origin, Direction destination, char sign){
     count[3]+=i;
     count[5]+=i;
   }if(origin == south && destination == east){
-    count[4]+=i;
+    count[10]+=i;
     count[6]+=i;
   }if(origin == east && destination == south){
     count[1]+=i;
@@ -144,13 +147,8 @@ static void count_changer(Direction origin, Direction destination, char sign){
     count[9]+=i;
     count[3]+=i;
   }if(origin == north && destination == west){
-    count[1]+=i;
-    count[10]+=i;
-    count[4]+=i;
-    count[2]+=i;
-    count[0]+=i;
-    count[9]+=i;
-    count[3]+=i;
+    count[4] +=i;
+    count[0] +=i;
   }if(origin == west && destination == north){
     count[1]+=i;
     count[7]+=i;
@@ -244,7 +242,7 @@ static void sub_wait_count(Direction origin, Direction destination){
     wake_up_all(5);
   }else if(origin == south && destination == east){
     count_changer(origin, destination, '-');
-    wake_up_all(4);
+    wake_up_all(10);
     wake_up_all(6);
   }else if(origin == east && destination == south){
     count_changer(origin, destination, '-');
@@ -286,13 +284,8 @@ static void sub_wait_count(Direction origin, Direction destination){
     wake_up_all(3);
   }else if(origin == north && destination == west){
     count_changer(origin, destination, '-');
-    wake_up_all(1);
-    wake_up_all(10);
     wake_up_all(4);
-    wake_up_all(2);
     wake_up_all(0);
-    wake_up_all(9);
-    wake_up_all(3);
   }else if(origin == west && destination == north){
     count_changer(origin, destination, '-');
     wake_up_all(1);
@@ -336,17 +329,19 @@ intersection_before_entry(Direction origin, Direction destination)
 {
   /* replace this default implementation with your own implementation */
   KASSERT(intersectionlock != NULL);
-  int *num_count;
-  struct cv *cur_cv;
   lock_acquire(intersectionlock);
-  set_wait_count(origin, destination, num_count, &cur_cv);
+
+  int num_count;
+  struct cv * cur_cv;
+  set_wait_count(origin, destination, &num_count, &cur_cv);
 
   while(true){
-    if (*num_count == 0){
+    if (num_count == 0){
       add_wait_count(origin, destination);
+      break;
     }else{
       cv_wait(cur_cv, intersectionlock);
-      set_wait_count(origin, destination, num_count, &cur_cv);
+      set_wait_count(origin, destination, &num_count, &cur_cv);
     }
   }
 
@@ -369,7 +364,7 @@ void
 intersection_after_exit(Direction origin, Direction destination) 
 {
   /* replace this default implementation with your own implementation */
-  KASSERT(intersectionSem != NULL);
+  KASSERT(intersectionlock != NULL);
   lock_acquire(intersectionlock);
   sub_wait_count(origin, destination);
   lock_release(intersectionlock);
