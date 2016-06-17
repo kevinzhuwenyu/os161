@@ -38,12 +38,33 @@
 
 #include <spinlock.h>
 #include <thread.h> /* required for struct threadarray */
+#include <array.h>
+#include "opt-A2.h"
 
 struct addrspace;
 struct vnode;
 #ifdef UW
 struct semaphore;
 #endif // UW
+
+#if OPT_A2
+struct lock * proc_lock;
+struct lock * ava_pid_lock;
+struct cv * proc_cv;
+struct array * allp_relation;
+struct array * ava_pid; /* pid number be used before, but available now (i.e process exit) */ 
+pid_t pidc; /* proc number count */
+struct p_relation* p_relation_create(pid_t p_pid_num, pid_t c_pid_num);
+void add_pid(pid_t a_pid);
+
+struct p_relation{
+	pid_t parent_pid;
+	pid_t child_pid;
+	bool parent_alive;
+	bool child_alive;
+	int ex_code;
+};
+#endif /* OPT_A2 */
 
 /*
  * Process structure.
@@ -59,6 +80,12 @@ struct proc {
 	/* VFS */
 	struct vnode *p_cwd;		/* current working directory */
 
+
+#if OPT_A2
+    pid_t p_pid;
+#endif /* OPT_A2 */
+
+
 #ifdef UW
   /* a vnode to refer to the console device */
   /* this is a quick-and-dirty way to get console writes working */
@@ -69,6 +96,8 @@ struct proc {
 #endif
 
 	/* add more material here as needed */
+
+
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */

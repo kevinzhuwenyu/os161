@@ -50,6 +50,8 @@
 #include <vfs.h>
 #include <synch.h>
 #include <kern/fcntl.h>  
+#include "opt-A2.h"
+
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -70,7 +72,20 @@ struct semaphore *no_proc_sem;
 #endif  // UW
 
 
+#if OPT_A2
+struct p_relation * p_relation_create(pid_t p_pid_num, pid_t c_pid_num){
 
+	struct p_relation *p_rela;
+
+	p_rela = kmalloc(sizeof(*p_rela));
+	p_rela->parent_pid = p_pid_num;
+	p_rela->child_pid = c_pid_num;
+	p_rela->parent_alive = true;
+	p_rela->child_alive = true;
+	p_rela->ex_code = 0;
+	return p_rela;
+}
+#endif /* OPT_A2 */
 /*
  * Create a proc structure.
  */
@@ -197,6 +212,23 @@ proc_bootstrap(void)
   if (kproc == NULL) {
     panic("proc_create for kproc failed\n");
   }
+
+#if OPT_A2
+  /* init locks and arry */
+  pidc = 1;
+  allp_relation = array_create();
+  proc_lock = lock_create("proc_lock");
+  if (proc_lock == NULL){
+  	panic("could not create proc_lock lock\n");
+  }
+  ava_pid = array_create();
+  ava_pid_lock = lock_create("ava_pid_lock");
+  if(ava_pid_lock == NULL){
+  	panic("could not create ava_pid_lock lock\n");
+  }
+  proc_cv = cv_create("proc_cv");
+#endif /* OPT_A2 */
+
 #ifdef UW
   proc_count = 0;
   proc_count_mutex = sem_create("proc_count_mutex",1);
@@ -208,6 +240,7 @@ proc_bootstrap(void)
     panic("could not create no_proc_sem semaphore\n");
   }
 #endif // UW 
+
 }
 
 /*
@@ -261,6 +294,22 @@ proc_create_runprogram(const char *name)
 	}
 	spinlock_release(&curproc->p_lock);
 #endif // UW
+
+#if OPT_A2
+	/* set the pid to that process */
+	lock_acquire(ava_pid_lock);
+	if(array_num(ava_pid) != 0){
+		pid_t *temp = (pid_t*) array_get(ava_pid, 0);
+		proc->p_pid = *temp;
+		kfree(array_get(ava_pid, 0));
+		array_remove(ava_pid, 0);
+	}else{
+		pidc = pidc + 1;
+		proc->p_pid = pidc;
+	}
+	lock_release(ava_pid_lock);
+#endif /* OPT_A2 */
+
 
 #ifdef UW
 	/* increment the count of processes */
