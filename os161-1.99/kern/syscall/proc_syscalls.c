@@ -17,6 +17,15 @@
   /* this implementation of sys__exit does not do anything with the exit code */
   /* this needs to be fixed to get exit() and waitpid() working properly */
 
+#if OPT_A2
+void add_pid(pid_t curpid){
+  pid_t *pid_pointer = kmalloc(sizeof(pid_t));
+  *pid_pointer = curpid;
+  array_add(ava_pid, ((void*) pid_pointer), NULL);
+}
+
+#endif /* OPT_A2 */
+
 
 
 void sys__exit(int exitcode) {
@@ -58,10 +67,8 @@ void sys__exit(int exitcode) {
       if(temp->parent_alive == false){ // parent of curproc is dead, the pid of curproc is available now
           //DEBUG(DB_SYSCALL, "parent of curproc exited, pid of curproc can be reuse \n");
         lock_acquire(ava_pid_lock);
-        pid_t *pid_pointer = kmalloc(sizeof(pid_t));
-        *pid_pointer = curpid;
-        array_add(ava_pid, ((void*) pid_pointer), NULL);
-        //add_pid(curpid);
+        
+        add_pid(curpid);
         lock_release(ava_pid_lock);
 
         array_remove(allp_relation, i); //curproc have be killed
@@ -82,11 +89,7 @@ void sys__exit(int exitcode) {
       if(temp->child_alive == false){ // child has been killed, it's pid is available now
           //DEBUG (DB_SYSCALL, "curproc's child died, it's pid can be reuse \n");
         lock_acquire(ava_pid_lock);
-        pid_t *pid_pointer = kmalloc(sizeof(pid_t));
-        *pid_pointer = temp->child_pid;
-        array_add(ava_pid, ((void*) pid_pointer), NULL);
-
-        //add_pid(temp->child_pid);
+        add_pid(temp->child_pid);
         lock_release(ava_pid_lock);
 
         array_remove(allp_relation, i);
