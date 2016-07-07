@@ -289,6 +289,8 @@ void cleanup(char **arr, int length){
 int sys_execv(char* program, char** args){ 
   int numagrs = 0;
   int result;
+  char** dest;
+  size_t actual;
 
   //DEBUG(DB_SYSCALL, "count the number of arguments\n");
   for(int i = 0; ((char**)args)[i] != NULL; i++){ // count the number of arguments
@@ -301,11 +303,11 @@ int sys_execv(char* program, char** args){
 
   //DEBUG(DB_SYSCALL, "copy arguments into kernel\n");
   //copy arguments into kernel
-  char** dest = kmalloc(numagrs * 4);
+  dest = kmalloc(numagrs * 4);
   for(int i = 0; i < numagrs-1; i++){
     int length = strlen(((char**)args)[i]) + 1;
     dest[i] = kmalloc(length);
-    result = copyinstr((const_userptr_t)args[i], dest[i], length, NULL);
+    result = copyinstr((const_userptr_t)args[i], dest[i], length, &actual);
 
     if(result){
       cleanup(dest, i);
@@ -319,7 +321,7 @@ int sys_execv(char* program, char** args){
   //copy the program path into kernel
   int pro_length = strlen(program) + 1;
   char dest2[pro_length];
-  result = copyin((const_userptr_t)program, dest2, strlen(program)+1);
+  result = copyin((const_userptr_t)program, dest2, pro_length);
   if(result){
     cleanup(dest, numagrs-1);
     return result;
@@ -380,22 +382,27 @@ int sys_execv(char* program, char** args){
     int length = strlen(dest[i]) + 1;
     int length_rp = ROUNDUP(length, 8);  //round size
     stackptr = stackptr - length_rp; //get the stack address
-    
     source[i] = (userptr_t) stackptr;
-    result = copyoutstr(dest[i], source[i], length * sizeof(char), NULL);
+
+    result = copyoutstr(dest[i], source[i], length, &actual);
+
     if(result){
+      cleanup(dest, numagrs-1);
       return result;
     }
   }
-
   source[numagrs-1] = NULL; //set NULL terminator
+
+  cleanup(dest, numagrs-1); // free dest after all usages
   
 //DEBUG(DB_SYSCALL, "copy array onto stack stack\n");
 
   //copy array onto stack stack
   int size = ROUNDUP(numagrs*sizeof(char*), 8);
   stackptr = stackptr - size;
-  result = copyout(source, (userptr_t)stackptr, (size_t)size);
+
+  userptr_t stackptr_copy = (userptr_t)stackptr;
+  result = copyout(source, stackptr_copy, size);
   if(result){
     return result;
   }
@@ -406,7 +413,7 @@ int sys_execv(char* program, char** args){
 
 //DEBUG(DB_SYSCALL, "sys_execv before enter new process\n");
 
-  enter_new_process(numagrs-1  /*argc*/, (userptr_t)stackptr /*userspace addr of argv*/,
+  enter_new_process(numagrs-1  /*argc*/, stackptr_copy /*userspace addr of argv*/,
         stackptr, entrypoint);
 
 //DEBUG(DB_SYSCALL, "sys_execv after enter new process\n");

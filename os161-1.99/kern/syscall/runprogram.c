@@ -64,7 +64,7 @@ runprogram(char *progname, char** args, unsigned long nargs){
 	vaddr_t entrypoint, stackptr;
 	int result;
 
-	//kprintf("runprogram start!!\n");
+	//DEBUG(DB_SYSCALL, "runprogram start!!\n");
 
 	/* Open the file. */
 	result = vfs_open(progname, O_RDONLY, 0, &v);
@@ -105,34 +105,33 @@ runprogram(char *progname, char** args, unsigned long nargs){
 		return result;
 	}
 
-	//kprintf("end of original rinprogram\n");
+DEBUG(DB_SYSCALL, "end of original runprogram\n");
 
     //copy strings onto user stack
+    size_t actual;
 	userptr_t source[nargs+1];
 
-	//kprintf("enter loop!!!\n");
+DEBUG(DB_SYSCALL, "enter loop!!!\n");
+
 	for(unsigned long i = 0; i < nargs; i++){
-	//kprintf("       almost end     \n");
+DEBUG(DB_SYSCALL, "       almost end     \n");
 		int length = strlen(args[i]) + 1;
-		char *temp = kmalloc(sizeof(char)*length);
+		//char temp[length];
+		//strcpy(temp, args[i]);
+DEBUG(DB_SYSCALL, "       almost end2     \n");
 
-
-		strcpy(temp, args[i]);
-	//kprintf("       almost end2     \n");
-
-		temp[length-1] = '\0';
+		//temp[length-1] = '\0';
 		int rp = ROUNDUP(length, 8);
 		stackptr = stackptr - rp; // set stack address
 		source[i] = (userptr_t)stackptr; // store stack address
 
-		result =  copyoutstr(temp, (userptr_t)stackptr, rp, NULL);
+		result =  copyoutstr(args[i]/*temp*/, (userptr_t)stackptr, rp, &actual);
 		if(result){
 			return result;
 		}
-		kfree(temp);
 	}
 
-	//kprintf("out loop\n");
+DEBUG(DB_SYSCALL, "out loop\n");
 
 	source[nargs] = NULL; // set NULL terminator
 
@@ -144,12 +143,12 @@ runprogram(char *progname, char** args, unsigned long nargs){
 		return result;
 	}
 
-	//kprintf("before enter new process\n");
+DEBUG(DB_SYSCALL, "before enter new process\n");
 
 	/* Warp to user mode. */
 	enter_new_process((int)nargs, (userptr_t)stackptr, stackptr, entrypoint);
 
-	//kprintf("after enter new process\n");
+DEBUG(DB_SYSCALL, "after enter new process\n");
 	
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
