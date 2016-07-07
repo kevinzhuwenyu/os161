@@ -288,36 +288,18 @@ void cleanup(char **arr, int length){
 
 int sys_execv(char* program, char** args){ 
   int numagrs = 0;
-  char** temp;
   int result;
 
-  //kprintf("sys_execv start\n");
-
-  //kprintf("111sys_execv before copy\n");
-  result = copyin((const_userptr_t)args, &temp, sizeof(char**)); 
-  if(result){
-    return result;
-  }
-
-  //kprintf("111sys_execv after copyin\n");
-
-  //kprintf("count the number of arguments\n");
-
+  //DEBUG(DB_SYSCALL, "count the number of arguments\n");
   for(int i = 0; ((char**)args)[i] != NULL; i++){ // count the number of arguments
     numagrs++;
 
   }
   numagrs++; //Null terminator
 
-  /*//kprintf("sys_execv before copy\n");
-  result = copyin(args, dest, numagrs * sizeof(char*)); 
-  if(result){
-    return result;
-  }
+  
 
-  //kprintf("sys_execv after copyin\n");*/
-
-  //kprintf("copy arguments into kernel\n");
+  //DEBUG(DB_SYSCALL, "copy arguments into kernel\n");
   //copy arguments into kernel
   char** dest = kmalloc(numagrs * 4);
   for(int i = 0; i < numagrs-1; i++){
@@ -332,14 +314,14 @@ int sys_execv(char* program, char** args){
   }
   dest[numagrs-1] = NULL;
 
-  //kprintf("copy the program path into kernel\n");
+  //DEBUG(DB_SYSCALL, "copy the program path into kernel\n");
 
   //copy the program path into kernel
-  char* dest2 = kmalloc(strlen(program) + 1);
+  int pro_length = strlen(program) + 1;
+  char dest2[pro_length];
   result = copyin((const_userptr_t)program, dest2, strlen(program)+1);
   if(result){
     cleanup(dest, numagrs-1);
-    kfree(dest2);
     return result;
   }
 
@@ -349,23 +331,21 @@ int sys_execv(char* program, char** args){
   struct vnode *v;
   vaddr_t entrypoint, stackptr;
   
-  //kprintf("open the file\n");
+  //DEBUG(DB_SYSCALL, "open the file\n");
 
   // Open the file
   result = vfs_open(dest2, O_RDONLY, 0, &v);
   if (result) {
     cleanup(dest, numagrs-1);
-    kfree(dest2);
     return result;
   }
 
-//kprintf("Create a new address space\n");
+//DEBUG(DB_SYSCALL, "Create a new address space\n");
   // Create a new address space.
   as = as_create();
   if (as ==NULL) {
     vfs_close(v);
     cleanup(dest, numagrs-1);
-    kfree(dest2);
     return ENOMEM;
   }
 
@@ -379,7 +359,6 @@ int sys_execv(char* program, char** args){
     /* p_addrspace will go away when curproc is destroyed */
     vfs_close(v);
     cleanup(dest, numagrs-1);
-    kfree(dest2);
     return result;
   }
 
@@ -390,11 +369,10 @@ int sys_execv(char* program, char** args){
   if (result) {
     /* p_addrspace will go away when curproc is destroyed */
     cleanup(dest, numagrs-1);
-    kfree(dest2);
     return result;
   }
 
-//kprintf("copy strings onto user stack\n");
+//DEBUG(DB_SYSCALL, "copy strings onto user stack\n");
 
   //copy strings onto user stack
   userptr_t source[numagrs];
@@ -412,7 +390,7 @@ int sys_execv(char* program, char** args){
 
   source[numagrs-1] = NULL; //set NULL terminator
   
-//kprintf("copy array onto stack stack\n");
+//DEBUG(DB_SYSCALL, "copy array onto stack stack\n");
 
   //copy array onto stack stack
   int size = ROUNDUP(numagrs*sizeof(char*), 8);
@@ -426,12 +404,12 @@ int sys_execv(char* program, char** args){
   as_destroy(old_as);
 
 
-//kprintf("sys_execv before enter new process\n");
+//DEBUG(DB_SYSCALL, "sys_execv before enter new process\n");
 
   enter_new_process(numagrs-1  /*argc*/, (userptr_t)stackptr /*userspace addr of argv*/,
         stackptr, entrypoint);
 
-//kprintf("sys_execv after enter new process\n");
+//DEBUG(DB_SYSCALL, "sys_execv after enter new process\n");
 
   /* enter_new_process does not return. */
   panic("enter_new_process returned\n");
