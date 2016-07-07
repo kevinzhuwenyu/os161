@@ -12,6 +12,8 @@
 #include <kern/limits.h>
 #include <synch.h>
 #include <mips/trapframe.h>
+#include <vfs.h>
+#include <kern/fcntl.h>
 #include "opt-A2.h"
 
   /* this implementation of sys__exit does not do anything with the exit code */
@@ -273,8 +275,167 @@ int sys_fork(struct trapframe *tf, pid_t *retval){
        //DEBUG(DB_SYSCALL, "assign return value \n");
 
   return(0);
+}
+
+void cleanup(char **arr, int length);
+void cleanup(char **arr, int length){
+  for(long i=0; i<length; i++){
+    kfree(arr[i]);
+  }
+  kfree(arr);
+}
 
 
+int sys_execv(char* program, char** args){ 
+  int numagrs = 0;
+  char** temp;
+  int result;
+
+  //kprintf("sys_execv start\n");
+
+  //kprintf("111sys_execv before copy\n");
+  result = copyin((const_userptr_t)args, &temp, sizeof(char**)); 
+  if(result){
+    return result;
+  }
+
+  //kprintf("111sys_execv after copyin\n");
+
+  //kprintf("count the number of arguments\n");
+
+  for(int i = 0; ((char**)args)[i] != NULL; i++){ // count the number of arguments
+    numagrs++;
+
+  }
+  numagrs++; //Null terminator
+
+  /*//kprintf("sys_execv before copy\n");
+  result = copyin(args, dest, numagrs * sizeof(char*)); 
+  if(result){
+    return result;
+  }
+
+  //kprintf("sys_execv after copyin\n");*/
+
+  //kprintf("copy arguments into kernel\n");
+  //copy arguments into kernel
+  char** dest = kmalloc(numagrs * 4);
+  for(int i = 0; i < numagrs-1; i++){
+    int length = strlen(((char**)args)[i]) + 1;
+    dest[i] = kmalloc(length);
+    result = copyinstr((const_userptr_t)args[i], dest[i], length, NULL);
+
+    if(result){
+      cleanup(dest, i);
+      return result;
+    }
+  }
+  dest[numagrs-1] = NULL;
+
+  //kprintf("copy the program path into kernel\n");
+
+  //copy the program path into kernel
+  char* dest2 = kmalloc(strlen(program) + 1);
+  result = copyin((const_userptr_t)program, dest2, strlen(program)+1);
+  if(result){
+    cleanup(dest, numagrs-1);
+    kfree(dest2);
+    return result;
+  }
+
+
+  struct addrspace *as;
+  struct addrspace *old_as;
+  struct vnode *v;
+  vaddr_t entrypoint, stackptr;
+  
+  //kprintf("open the file\n");
+
+  // Open the file
+  result = vfs_open(dest2, O_RDONLY, 0, &v);
+  if (result) {
+    cleanup(dest, numagrs-1);
+    kfree(dest2);
+    return result;
+  }
+
+//kprintf("Create a new address space\n");
+  // Create a new address space.
+  as = as_create();
+  if (as ==NULL) {
+    vfs_close(v);
+    cleanup(dest, numagrs-1);
+    kfree(dest2);
+    return ENOMEM;
+  }
+
+  // set process to the new address space, and activate it
+  old_as = curproc_setas(as);
+  as_activate();
+
+  // Load the executable.
+  result = load_elf(v, &entrypoint);
+  if (result) {
+    /* p_addrspace will go away when curproc is destroyed */
+    vfs_close(v);
+    cleanup(dest, numagrs-1);
+    kfree(dest2);
+    return result;
+  }
+
+  vfs_close(v);
+
+  // Define the user stack in the address space 
+  result = as_define_stack(as, &stackptr);
+  if (result) {
+    /* p_addrspace will go away when curproc is destroyed */
+    cleanup(dest, numagrs-1);
+    kfree(dest2);
+    return result;
+  }
+
+//kprintf("copy strings onto user stack\n");
+
+  //copy strings onto user stack
+  userptr_t source[numagrs];
+  for(int i = 0; i < numagrs - 1; i++){
+    int length = strlen(dest[i]) + 1;
+    int length_rp = ROUNDUP(length, 8);  //round size
+    stackptr = stackptr - length_rp; //get the stack address
+    
+    source[i] = (userptr_t) stackptr;
+    result = copyoutstr(dest[i], source[i], length * sizeof(char), NULL);
+    if(result){
+      return result;
+    }
+  }
+
+  source[numagrs-1] = NULL; //set NULL terminator
+  
+//kprintf("copy array onto stack stack\n");
+
+  //copy array onto stack stack
+  int size = ROUNDUP(numagrs*sizeof(char*), 8);
+  stackptr = stackptr - size;
+  result = copyout(source, (userptr_t)stackptr, (size_t)size);
+  if(result){
+    return result;
+  }
+
+  //delete old address space
+  as_destroy(old_as);
+
+
+//kprintf("sys_execv before enter new process\n");
+
+  enter_new_process(numagrs-1  /*argc*/, (userptr_t)stackptr /*userspace addr of argv*/,
+        stackptr, entrypoint);
+
+//kprintf("sys_execv after enter new process\n");
+
+  /* enter_new_process does not return. */
+  panic("enter_new_process returned\n");
+  return EINVAL;
 }
 
 #endif /* OPT_A2 */
