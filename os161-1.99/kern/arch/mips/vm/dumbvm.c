@@ -37,6 +37,7 @@
 #include <mips/tlb.h>
 #include <addrspace.h>
 #include <vm.h>
+#include "opt-A3.h"
 
 /*
  * Dumb MIPS-only "VM system" that is intended to only be just barely
@@ -51,9 +52,46 @@
  */
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 
+#if OPT_A3
+static int * coremap;
+static paddr_t start, end;
+static int numframe;
+static int boot_complete = 0;
+static struct spinlock coremap_lock = SPINLOCK_INITIALIZER;
+#endif /* OPT_A3 */
+
+
 void
 vm_bootstrap(void)
 {
+#if OPT_A3
+	ram_getsize(&start, &end);
+
+	coremap = (int *) PADDR_TO_KVADDR(start); //set vaddress to coremap
+
+	numframe = (end - start) / PAGE_SIZE;
+	int size_coremap =  numframe*4;
+
+	int frame_used;
+
+	if(size_coremap % PAGE_SIZE == 0){
+		frame_used = size_coremap / PAGE_SIZE;
+	}else{
+		frame_used = (size_coremap / PAGE_SIZE) + 1;
+	}
+
+
+	numframe = numframe - frame_used;
+	start = start + frame_used * PAGE_SIZE;
+
+	for(int i = 0; i < numframe; i++){ //set all frame to be available
+		coremap[i] = 0;
+	}
+
+	boot_complete = 1; //bootstrap done
+#endif /* OPT_A3 */
+
+
 	/* Do nothing. */
 }
 
@@ -63,12 +101,27 @@ getppages(unsigned long npages)
 {
 	paddr_t addr;
 
+#if OPT_A3
+	if(boot_complete == 1){ //bootstrap done
+		addr = alloc_kpages(npages);
+		addr = addr - MIPS_KSEG0; //convert vaddress to paddress
+		return addr;
+
+	}else{
+		spinlock_acquire(&stealmem_lock);
+		addr = ram_stealmem(npages);
+		spinlock_release(&stealmem_lock);
+		return addr;
+	}
+#else
 	spinlock_acquire(&stealmem_lock);
 
 	addr = ram_stealmem(npages);
 	
 	spinlock_release(&stealmem_lock);
 	return addr;
+#endif
+
 }
 
 /* Allocate/free some kernel-space virtual pages */
@@ -76,6 +129,46 @@ vaddr_t
 alloc_kpages(int npages)
 {
 	paddr_t pa;
+
+#if OPT_A3
+
+	if(boot_complete ==1 ){
+
+		bool mem_ava = true;
+	
+		spinlock_acquire(&coremap_lock);
+
+		for(int i = 0; i < numframe; i++){
+			for(int j = i; j < i + npages; j++){
+				if(coremap[j] ==0){
+					continue;
+				}else{ //not find enough mem space
+					mem_ava = false;
+					break;
+				}
+			}
+
+			if(mem_ava == true){//if find enough continous mem
+				for(int m = i; m < i + npages; m++){ //set frame to be used
+					if(m == i){
+						coremap[m] = npages;
+					}else{
+						coremap[m] = 1;
+					}
+				}
+				spinlock_release(&coremap_lock);
+				pa = start + i * PAGE_SIZE;
+				return PADDR_TO_KVADDR(pa); //convert to vaddress
+			}else{
+				mem_ava = true;
+			}
+
+		}
+		spinlock_release(&coremap_lock);
+		return 0;
+	}
+
+#endif
 	pa = getppages(npages);
 	if (pa==0) {
 		return 0;
@@ -83,13 +176,29 @@ alloc_kpages(int npages)
 	return PADDR_TO_KVADDR(pa);
 }
 
+
 void 
 free_kpages(vaddr_t addr)
 {
+#if OPT_A3
+	paddr_t paddr = addr - MIPS_KSEG0;
+	int f_start = (paddr - start) / PAGE_SIZE; //start frame
+
+	spinlock_acquire(&coremap_lock);
+	int f_len = coremap[f_start]; // get the num of frames need free
+
+	for(int i = f_start; i < f_start + f_len; i++){
+		coremap[i] = 0;
+	}
+
+	spinlock_release(&coremap_lock);
+#else
 	/* nothing - leak the memory. */
 
 	(void)addr;
+#endif /* OPT_A3 */
 }
+
 
 void
 vm_tlbshootdown_all(void)
@@ -120,8 +229,14 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 
 	switch (faulttype) {
 	    case VM_FAULT_READONLY:
+
+	    #if OPT_A3 //avoid kernel panic
+	    return 1;
+	    #else
 		/* We always create pages read-write, so we can't get this */
 		panic("dumbvm: got VM_FAULT_READONLY\n");
+		#endif /* OPT_A3 */
+
 	    case VM_FAULT_READ:
 	    case VM_FAULT_WRITE:
 		break;
@@ -195,15 +310,41 @@ vm_fault(int faulttype, vaddr_t faultaddress)
 		ehi = faultaddress;
 		elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
 		DEBUG(DB_VM, "dumbvm: 0x%x -> 0x%x\n", faultaddress, paddr);
+
+
+		#if OPT_A3 //set read-only segament
+		if(as->elf_complete == 1 && faultaddress >= vbase1 && faultaddress < vtop1){
+			elo &= ~TLBLO_DIRTY;
+		}
+		#endif /* OPT_A3 */
+
+
 		tlb_write(ehi, elo, i);
 		splx(spl);
 		return 0;
 	}
 
+
+	#if OPT_A3 //if tbl full, random replace one entry
+	ehi = faultaddress;
+	elo = paddr | TLBLO_DIRTY | TLBLO_VALID;
+
+	if(as->elf_complete == 1 && faultaddress >= vbase1 && faultaddress < vtop1){ //set read-only segement
+			elo &= ~TLBLO_DIRTY;
+		}
+
+	tlb_random(ehi, elo);
+	splx(spl);
+	return 0;
+
+	#else
 	kprintf("dumbvm: Ran out of TLB entries - cannot handle page fault\n");
 	splx(spl);
 	return EFAULT;
+	#endif /* OPT_A3 */
 }
+
+
 
 struct addrspace *
 as_create(void)
@@ -212,6 +353,10 @@ as_create(void)
 	if (as==NULL) {
 		return NULL;
 	}
+
+	#if OPT_A3
+	as->elf_complete = 0;
+	#endif /* OPT_A3 */
 
 	as->as_vbase1 = 0;
 	as->as_pbase1 = 0;
@@ -227,6 +372,11 @@ as_create(void)
 void
 as_destroy(struct addrspace *as)
 {
+#if OPT_A3
+	free_kpages(PADDR_TO_KVADDR(as->as_pbase1));
+	free_kpages(PADDR_TO_KVADDR(as->as_pbase2));
+	free_kpages(PADDR_TO_KVADDR(as->as_stackpbase));
+#endif
 	kfree(as);
 }
 
@@ -338,6 +488,9 @@ as_prepare_load(struct addrspace *as)
 int
 as_complete_load(struct addrspace *as)
 {
+	#if OPT_A3
+	as->elf_complete = 1;
+	#endif /* OPT_A3 */
 	(void)as;
 	return 0;
 }

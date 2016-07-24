@@ -292,7 +292,7 @@ int sys_execv(char* program, char** args){
   char** dest;
   size_t actual;
 
-  //DEBUG(DB_SYSCALL, "count the number of arguments\n");
+//DEBUG(DB_SYSCALL, "count the number of arguments\n");
   for(int i = 0; ((char**)args)[i] != NULL; i++){ // count the number of arguments
     numagrs++;
 
@@ -301,7 +301,7 @@ int sys_execv(char* program, char** args){
 
   
 
-  //DEBUG(DB_SYSCALL, "copy arguments into kernel\n");
+//DEBUG(DB_SYSCALL, "copy arguments into kernel\n");
   //copy arguments into kernel
   dest = kmalloc(numagrs * 4);
   for(int i = 0; i < numagrs-1; i++){
@@ -316,7 +316,7 @@ int sys_execv(char* program, char** args){
   }
   dest[numagrs-1] = NULL;
 
-  //DEBUG(DB_SYSCALL, "copy the program path into kernel\n");
+//DEBUG(DB_SYSCALL, "copy the program path into kernel\n");
 
   //copy the program path into kernel
   int pro_length = strlen(program) + 1;
@@ -333,7 +333,7 @@ int sys_execv(char* program, char** args){
   struct vnode *v;
   vaddr_t entrypoint, stackptr;
   
-  //DEBUG(DB_SYSCALL, "open the file\n");
+//DEBUG(DB_SYSCALL, "open the file\n");
 
   // Open the file
   result = vfs_open(dest2, O_RDONLY, 0, &v);
@@ -398,7 +398,7 @@ int sys_execv(char* program, char** args){
 //DEBUG(DB_SYSCALL, "copy array onto stack stack\n");
 
   //copy array onto stack stack
-  int size = ROUNDUP(numagrs*sizeof(char*), 8);
+  int size = ROUNDUP(numagrs*4, 8);
   stackptr = stackptr - size;
 
   userptr_t stackptr_copy = (userptr_t)stackptr;

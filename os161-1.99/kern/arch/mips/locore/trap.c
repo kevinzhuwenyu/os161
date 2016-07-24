@@ -39,6 +39,12 @@
 #include <vm.h>
 #include <mainbus.h>
 #include <syscall.h>
+#include <proc.h>
+#include <synch.h>
+#include <addrspace.h>
+#include "opt-A3.h"
+#include <kern/wait.h>
+
 
 
 /* in exception.S */
@@ -111,6 +117,84 @@ kill_curthread(vaddr_t epc, unsigned code, vaddr_t vaddr)
 	/*
 	 * You will probably want to change this.
 	 */
+	#if OPT_A3
+
+	struct addrspace *as;
+    struct proc *p = curproc;
+    
+    lock_acquire(proc_lock);
+    int nproc = array_num(allp_relation);
+    pid_t curpid = p->p_pid;
+  
+        //DEBUG (DB_SYSCALL, "start loop sys_exit \n");
+    struct p_relation *temp;
+  
+    for(int i = 0; i < nproc; i++){
+      temp = ((struct p_relation *) array_get(allp_relation, i));
+  
+      if(temp->child_pid == curpid){ //current proc is childern
+          //DEBUG (DB_SYSCALL, "curproc is a child proc \n");
+        temp->child_alive = false;
+        if(temp->parent_alive == false){ // parent of curproc is dead, the pid of curproc is available now
+            //DEBUG(DB_SYSCALL, "parent of curproc exited, pid of curproc can be reuse \n");
+          lock_acquire(ava_pid_lock);
+          
+          add_pid(curpid);
+          lock_release(ava_pid_lock);
+  
+          array_remove(allp_relation, i); //curproc have be killed
+          //kfree(pid_pointer);
+          i = i -1;
+          nproc = nproc - 1; //whole arry be moved froward one position
+        }else if (temp->parent_alive == true){ // temp->parent_alive == true
+            //DEBUG(DB_SYSCALL, "parent of curproc is still running \n");
+          temp->ex_code = _MKWAIT_EXIT(sig);
+          cv_broadcast(proc_cv, proc_lock);
+        }
+  
+  
+      }else if(temp->parent_pid == curpid){ //current proc is parent
+          //DEBUG (DB_SYSCALL, "curproc is a parent proc \n");
+  
+        temp->parent_alive = false;
+        if(temp->child_alive == false){ // child has been killed, it's pid is available now
+            //DEBUG (DB_SYSCALL, "curproc's child died, it's pid can be reuse \n");
+          lock_acquire(ava_pid_lock);
+          add_pid(temp->child_pid);
+          lock_release(ava_pid_lock);
+  
+          array_remove(allp_relation, i);
+          //kfree(pid_pointer);
+  
+          i = i-1;
+          nproc = nproc -1;
+        }else if(temp->child_alive == true){
+            //DEBUG (DB_SYSCALL, "do nothing \n");
+          continue;
+        }
+      }
+    }
+    lock_release(proc_lock);
+
+    KASSERT(curproc->p_addrspace != NULL);
+    as_deactivate();
+    /*
+     * clear p_addrspace before calling as_destroy. Otherwise if
+     * as_destroy sleeps (which is quite possible) when we
+     * come back we'll be calling as_activate on a
+     * half-destroyed address space. This tends to be
+     * messily fatal.
+     */
+    as = curproc_setas(NULL);
+  
+    as_destroy(as);
+  
+    /* detach this thread from its process */
+    /* note: curproc cannot be used after this call */
+    proc_remthread(curthread);
+    proc_destroy(p);
+    thread_exit();
+    #endif /* OPT_A3 */
 
 	kprintf("Fatal user mode trap %u sig %d (%s, epc 0x%x, vaddr 0x%x)\n",
 		code, sig, trapcodenames[code], epc, vaddr);
@@ -231,10 +315,13 @@ mips_trap(struct trapframe *tf)
 	 */
 	switch (code) {
 	case EX_MOD:
+
+	//kprintf("enter EX mode \n");
 		if (vm_fault(VM_FAULT_READONLY, tf->tf_vaddr)==0) {
 			goto done;
-		}
+		} 
 		break;
+
 	case EX_TLBL:
 		if (vm_fault(VM_FAULT_READ, tf->tf_vaddr)==0) {
 			goto done;

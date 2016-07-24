@@ -64,7 +64,7 @@ runprogram(char *progname, char** args, unsigned long nargs){
 	vaddr_t entrypoint, stackptr;
 	int result;
 
-	//DEBUG(DB_SYSCALL, "runprogram start!!\n");
+//DEBUG(DB_SYSCALL, "runprogram start!!\n");
 
 	/* Open the file. */
 	result = vfs_open(progname, O_RDONLY, 0, &v);
@@ -105,50 +105,45 @@ runprogram(char *progname, char** args, unsigned long nargs){
 		return result;
 	}
 
-DEBUG(DB_SYSCALL, "end of original runprogram\n");
+//DEBUG(DB_SYSCALL, "end of original runprogram\n");
 
-    //copy strings onto user stack
     size_t actual;
 	userptr_t source[nargs+1];
 
-DEBUG(DB_SYSCALL, "enter loop!!!\n");
-
+//DEBUG(DB_SYSCALL, "enter loop!!!\n");
+    
+    //copy strings onto user stack
 	for(unsigned long i = 0; i < nargs; i++){
-DEBUG(DB_SYSCALL, "       almost end     \n");
 		int length = strlen(args[i]) + 1;
-		//char temp[length];
-		//strcpy(temp, args[i]);
-DEBUG(DB_SYSCALL, "       almost end2     \n");
+		int length_rp = ROUNDUP(length, 8);
 
-		//temp[length-1] = '\0';
-		int rp = ROUNDUP(length, 8);
-		stackptr = stackptr - rp; // set stack address
+		stackptr = stackptr - length_rp; // set stack address
 		source[i] = (userptr_t)stackptr; // store stack address
-
-		result =  copyoutstr(args[i]/*temp*/, (userptr_t)stackptr, rp, &actual);
+		result =  copyoutstr(args[i], source[i], length_rp, &actual);
 		if(result){
 			return result;
 		}
 	}
 
-DEBUG(DB_SYSCALL, "out loop\n");
+//DEBUG(DB_SYSCALL, "out loop\n");
 
 	source[nargs] = NULL; // set NULL terminator
 
 	//copy array onto user stack
-	int size = ROUNDUP((nargs+1)*4, 8);
+	int size = ROUNDUP(nargs*4, 8);
 	stackptr = stackptr - size;
-	result = copyout(source, (userptr_t)stackptr, size);
+	userptr_t stackptr_copy = (userptr_t)stackptr;
+	result = copyout(source, stackptr_copy, size);
 	if(result){
 		return result;
 	}
 
-DEBUG(DB_SYSCALL, "before enter new process\n");
+//DEBUG(DB_SYSCALL, "before enter new process\n");
 
 	/* Warp to user mode. */
-	enter_new_process((int)nargs, (userptr_t)stackptr, stackptr, entrypoint);
+	enter_new_process((int)nargs, stackptr_copy, stackptr, entrypoint);
 
-DEBUG(DB_SYSCALL, "after enter new process\n");
+//DEBUG(DB_SYSCALL, "after enter new process\n");
 	
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
