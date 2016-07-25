@@ -70,9 +70,9 @@ vm_bootstrap(void)
 	coremap = (int *) PADDR_TO_KVADDR(start); //set vaddress to coremap
 
 	numframe = (end - start) / PAGE_SIZE;
-	int size_coremap =  numframe*4;
+	int size_coremap =  numframe*4; //size of array "coremap"
 
-	int frame_used;
+	int frame_used; //num of frame coremap occupy
 
 	if(size_coremap % PAGE_SIZE == 0){
 		frame_used = size_coremap / PAGE_SIZE;
@@ -81,7 +81,7 @@ vm_bootstrap(void)
 	}
 
 
-	numframe = numframe - frame_used;
+	numframe = numframe - frame_used; //frame avaiable after bootstarp
 	start = start + frame_used * PAGE_SIZE;
 
 	for(int i = 0; i < numframe; i++){ //set all frame to be available
@@ -103,9 +103,38 @@ getppages(unsigned long npages)
 
 #if OPT_A3
 	if(boot_complete == 1){ //bootstrap done
-		addr = alloc_kpages(npages);
-		addr = addr - MIPS_KSEG0; //convert vaddress to paddress
-		return addr;
+		bool mem_ava = true;
+	
+		spinlock_acquire(&coremap_lock);
+
+		for(int i = 0; i < numframe; i++){
+			for(unsigned int j = i; j < i + npages; j++){
+				if(coremap[j] ==0){
+					continue;
+				}else{ //not find enough mem space
+					mem_ava = false;
+					break;
+				}
+			}
+
+			if(mem_ava == true){//if find enough continous mem
+				for(unsigned int m = i; m < i + npages; m++){ //set frame to be used
+					if(m == (unsigned int)i){
+						coremap[m] = npages;
+					}else{
+						coremap[m] = 1;
+					}
+				}
+				spinlock_release(&coremap_lock);
+				addr = start + i * PAGE_SIZE; //set mem address
+				return addr;
+			}else{
+				mem_ava = true;
+			}
+
+		}
+		spinlock_release(&coremap_lock);
+		return 0;
 
 	}else{
 		spinlock_acquire(&stealmem_lock);
@@ -120,7 +149,7 @@ getppages(unsigned long npages)
 	
 	spinlock_release(&stealmem_lock);
 	return addr;
-#endif
+#endif /* OPT_A3 */
 
 }
 
@@ -130,45 +159,6 @@ alloc_kpages(int npages)
 {
 	paddr_t pa;
 
-#if OPT_A3
-
-	if(boot_complete ==1 ){
-
-		bool mem_ava = true;
-	
-		spinlock_acquire(&coremap_lock);
-
-		for(int i = 0; i < numframe; i++){
-			for(int j = i; j < i + npages; j++){
-				if(coremap[j] ==0){
-					continue;
-				}else{ //not find enough mem space
-					mem_ava = false;
-					break;
-				}
-			}
-
-			if(mem_ava == true){//if find enough continous mem
-				for(int m = i; m < i + npages; m++){ //set frame to be used
-					if(m == i){
-						coremap[m] = npages;
-					}else{
-						coremap[m] = 1;
-					}
-				}
-				spinlock_release(&coremap_lock);
-				pa = start + i * PAGE_SIZE;
-				return PADDR_TO_KVADDR(pa); //convert to vaddress
-			}else{
-				mem_ava = true;
-			}
-
-		}
-		spinlock_release(&coremap_lock);
-		return 0;
-	}
-
-#endif
 	pa = getppages(npages);
 	if (pa==0) {
 		return 0;
@@ -376,8 +366,9 @@ as_destroy(struct addrspace *as)
 	free_kpages(PADDR_TO_KVADDR(as->as_pbase1));
 	free_kpages(PADDR_TO_KVADDR(as->as_pbase2));
 	free_kpages(PADDR_TO_KVADDR(as->as_stackpbase));
-#endif
+#else
 	kfree(as);
+#endif /* OPT_A3 */
 }
 
 void
